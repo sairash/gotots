@@ -530,3 +530,167 @@ type Empty struct {
 	}
 }
 
+func TestGenerateWithJSONTag(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	goFile := filepath.Join(tmpDir, "model.go")
+	err := os.WriteFile(goFile, []byte(`package models
+
+type User struct {
+	ID        int    `+"`json:\"id\"`"+`
+	FirstName string `+"`json:\"first_name\"`"+`
+	LastName  string `+"`json:\"lastName\"`"+`
+	Email     string
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outputFile := filepath.Join(tmpDir, "types.ts")
+	err = New().FromDir(tmpDir).ToFile(outputFile).Generate()
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("Failed to read output: %v", err)
+	}
+
+	output := string(content)
+	if !strings.Contains(output, "id: number") {
+		t.Error("Output should use JSON tag 'id' instead of 'ID'")
+	}
+	if !strings.Contains(output, "first_name: string") {
+		t.Error("Output should use JSON tag 'first_name' instead of 'FirstName'")
+	}
+	if !strings.Contains(output, "lastName: string") {
+		t.Error("Output should use JSON tag 'lastName' instead of 'LastName'")
+	}
+	if !strings.Contains(output, "Email: string") {
+		t.Error("Output should keep 'Email' when no JSON tag is present")
+	}
+}
+
+func TestGenerateWithJSONTagOmitEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	goFile := filepath.Join(tmpDir, "model.go")
+	err := os.WriteFile(goFile, []byte(`package models
+
+type Profile struct {
+	Bio      string `+"`json:\"bio,omitempty\"`"+`
+	Website  string `+"`json:\"website,omitempty\"`"+`
+	Location string `+"`json:\"location\"`"+`
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outputFile := filepath.Join(tmpDir, "types.ts")
+	err = New().FromDir(tmpDir).ToFile(outputFile).Generate()
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("Failed to read output: %v", err)
+	}
+
+	output := string(content)
+	if !strings.Contains(output, "bio?: string") {
+		t.Error("Field with omitempty should be optional (bio?:)")
+	}
+	if !strings.Contains(output, "website?: string") {
+		t.Error("Field with omitempty should be optional (website?:)")
+	}
+	if !strings.Contains(output, "location: string") {
+		t.Error("Field without omitempty should not be optional")
+	}
+	if strings.Contains(output, "location?:") {
+		t.Error("Field without omitempty should not have optional marker")
+	}
+}
+
+func TestGenerateWithJSONTagSkip(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	goFile := filepath.Join(tmpDir, "model.go")
+	err := os.WriteFile(goFile, []byte(`package models
+
+type Secret struct {
+	PublicKey  string `+"`json:\"public_key\"`"+`
+	PrivateKey string `+"`json:\"-\"`"+`
+	Internal   string `+"`json:\"-\"`"+`
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outputFile := filepath.Join(tmpDir, "types.ts")
+	err = New().FromDir(tmpDir).ToFile(outputFile).Generate()
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("Failed to read output: %v", err)
+	}
+
+	output := string(content)
+	if !strings.Contains(output, "public_key: string") {
+		t.Error("Output should contain 'public_key' field")
+	}
+	// Fields with json:"-" should use the original field name (not be skipped entirely)
+	if !strings.Contains(output, "PrivateKey: string") {
+		t.Error("Field with json:\"-\" should use original field name 'PrivateKey'")
+	}
+	if !strings.Contains(output, "Internal: string") {
+		t.Error("Field with json:\"-\" should use original field name 'Internal'")
+	}
+}
+
+func TestGenerateWithJSONTagAndPointer(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	goFile := filepath.Join(tmpDir, "model.go")
+	err := os.WriteFile(goFile, []byte(`package models
+
+type OptionalFields struct {
+	Name     *string `+"`json:\"name\"`"+`
+	Age      *int    `+"`json:\"age,omitempty\"`"+`
+	Nickname *string
+}
+`), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	outputFile := filepath.Join(tmpDir, "types.ts")
+	err = New().FromDir(tmpDir).ToFile(outputFile).Generate()
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("Failed to read output: %v", err)
+	}
+
+	output := string(content)
+	// Pointer fields are already optional
+	if !strings.Contains(output, "name?: string | null") {
+		t.Error("Pointer field should be optional and nullable with JSON tag name")
+	}
+	if !strings.Contains(output, "age?: number | null") {
+		t.Error("Pointer field with omitempty should be optional and nullable")
+	}
+	if !strings.Contains(output, "Nickname?: string | null") {
+		t.Error("Pointer field without JSON tag should use original name")
+	}
+}

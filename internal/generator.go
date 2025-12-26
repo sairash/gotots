@@ -82,7 +82,12 @@ func (g *Generator) generateStruct(structInfo StructInfo) string {
 			optionalMarker = "?"
 		}
 
-		sb.WriteString(fmt.Sprintf("    %s%s: %s;\n", field.Name, optionalMarker, tsType))
+		fieldName := field.Name
+		if field.JSONTag != "" {
+			fieldName = field.JSONTag
+		}
+
+		sb.WriteString(fmt.Sprintf("    %s%s: %s;\n", fieldName, optionalMarker, tsType))
 	}
 
 	sb.WriteString("};\n")

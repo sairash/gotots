@@ -97,8 +97,9 @@ func (p *Parser) parseStruct(name, pkgName string, structType *ast.StructType) *
 		}
 
 		fieldInfo := FieldInfo{
-			Name: field.Names[0].Name,
-			Type: p.typeToString(field.Type),
+			Name:    field.Names[0].Name,
+			Type:    p.typeToString(field.Type),
+			JSONTag: "",
 		}
 
 		if strings.HasPrefix(fieldInfo.Type, "*") {
@@ -111,7 +112,14 @@ func (p *Parser) parseStruct(name, pkgName string, structType *ast.StructType) *
 
 		if field.Tag != nil {
 			tag := strings.Trim(field.Tag.Value, "`")
-			fieldInfo.JSONTag = tag
+			name, hasOmitEmpty := p.parseJSONTagFull(tag)
+			if name != "" {
+				fieldInfo.JSONTag = name
+			}
+
+			if hasOmitEmpty {
+				fieldInfo.IsOptional = true
+			}
 		}
 
 		result.Fields = append(result.Fields, fieldInfo)
@@ -135,4 +143,29 @@ func (p *Parser) typeToString(expr ast.Expr) string {
 	default:
 		return "any"
 	}
+}
+
+// parses a json tag and returns the name and if it has omitempty
+func (p *Parser) parseJSONTagFull(tag string) (name string, hasOmitEmpty bool) {
+	for _, part := range strings.Split(tag, " ") {
+		if strings.HasPrefix(part, "json:") {
+			value := strings.TrimPrefix(part, "json:")
+			value = strings.Trim(value, "\"")
+
+			// Check for omitempty
+			if strings.Contains(value, "omitempty") {
+				hasOmitEmpty = true
+			}
+
+			// Get just the name, not options like omitempty
+			if idx := strings.Index(value, ","); idx != -1 {
+				value = value[:idx]
+			}
+			if value != "-" {
+				name = value
+			}
+			return name, hasOmitEmpty
+		}
+	}
+	return "", false
 }
