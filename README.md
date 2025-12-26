@@ -64,19 +64,21 @@ package models
 import "time"
 
 type User struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	Avatar    *string   `json:"avatar"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        int64
+	Name      string
+	Email     string
+	Avatar    *string
+	CreatedAt time.Time
 }
 
 type Post struct {
-	ID      int64    `json:"id"`
-	Title   string   `json:"title"`
-	Content string   `json:"content"`
-	Author  User     `json:"author"`
-	Tags    []string `json:"tags"`
+	ID        int64     `json:"id"`
+	Title     string    `json:"title"`
+	Content   string    `json:"content"`
+	Author    User      `json:"author,omitempty"`
+	Tags      []string  `json:"tags"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 ```
 
@@ -94,12 +96,15 @@ export interface User {
 };
 
 export interface Post {
-    ID: number;
-    Title: string;
-    Content: string;
-    Author: User;
-    Tags: string[];
+    id: number;
+    title: string;
+    content: string;
+    author?: User;
+    tags: string[];
+    created_at: string;
+    updated_at: string;
 };
+
 ```
 
 ## Type Mappings
