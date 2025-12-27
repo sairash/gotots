@@ -694,3 +694,172 @@ type OptionalFields struct {
 		t.Error("Pointer field without JSON tag should use original name")
 	}
 }
+
+// Helper to setup a test environment and run the generator
+func runTestGenerator(t *testing.T, fileName, goContent string) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	goFile := filepath.Join(tmpDir, fileName)
+	if err := os.WriteFile(goFile, []byte(goContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	outputFile := filepath.Join(tmpDir, "output.ts")
+	err := New().FromDir(tmpDir).ToFile(outputFile).Generate()
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("Failed to read output: %v", err)
+	}
+	return string(content)
+}
+
+func TestGenerateErrors(t *testing.T) {
+	tests := []struct {
+		name      string
+		setup     func(g *Generator) *Generator
+		wantError string
+	}{
+		{
+			"Missing Input Dir",
+			func(g *Generator) *Generator { return g.ToFile("out.ts") },
+			"input directory",
+		},
+		{
+			"Missing Output File",
+			func(g *Generator) *Generator { return g.FromDir(".") },
+			"output file",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.setup(New()).Generate()
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Errorf("Expected error containing %q, got: %v", tt.wantError, err)
+			}
+		})
+	}
+}
+
+func TestGenerateStructs(t *testing.T) {
+	tests := []struct {
+		name           string
+		goSource       string
+		mustContain    []string
+		mustNotContain []string
+	}{
+		{
+			"Basic Struct",
+			`package models
+             type User struct { ID int; Name string }`,
+			[]string{"export interface User", "ID: number", "Name: string"},
+			nil,
+		},
+		{
+			"JSON Tags and OmitEmpty",
+			`package models
+             type Profile struct {
+                 Bio string ` + "`json:\"bio,omitempty\"`" + `
+                 Age int    ` + "`json:\"age\"`" + `
+             }`,
+			[]string{"bio?: string", "age: number"},
+			[]string{"Bio:", "Age:"},
+		},
+		{
+			"Pointers and Nullability",
+			`package models
+             type Meta struct { Title *string }`,
+			[]string{"Title?: string | null"},
+			nil,
+		},
+		{
+			"Deeply Nested and Anonymous Structs",
+			`package models
+			type StructD struct {
+				NestedAnonyStruct struct {
+					FieldX struct {
+						FieldX1 string ` + "`json:\"field_x1\"`" + `
+						FieldX2 string ` + "`json:\"field_x2\"`" + `
+					} ` + "`json:\"field_x\"`" + `
+					FieldY string ` + "`json:\"field_y\"`" + `
+				} ` + "`json:\"nested_anony_struct\"`" + `
+				FieldD struct {
+					FieldD1 string ` + "`json:\"field_d1\"`" + `
+					FieldD2 struct {
+						FieldD21 struct {
+							FieldD211 string ` + "`json:\"field_d211\"`" + `
+						} ` + "`json:\"field_d21\"`" + `
+					} ` + "`json:\"field_d2\"`" + `
+				} ` + "`json:\"field_d\"`" + `
+			}`,
+			[]string{
+				"nested_anony_struct: {",
+				"field_x: {",
+				"field_x1: string",
+				"field_d: {",
+				"field_d21: {",
+				"field_d211: string",
+			},
+			nil,
+		},
+		{
+			"Collections (Maps and Slices)",
+			`package models
+             type Data struct {
+                 Tags []string
+                 Meta map[string]int
+             }`,
+			[]string{"Tags: string[]", "Meta: Record<string, number>"},
+			nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := runTestGenerator(t, "model.go", tt.goSource)
+			for _, search := range tt.mustContain {
+				if !strings.Contains(output, search) {
+					t.Errorf("Output missing expected string %q\nFull Output:\n%s", search, output)
+				}
+			}
+			for _, avoid := range tt.mustNotContain {
+				if strings.Contains(output, avoid) {
+					t.Errorf("Output contains unexpected string %q", avoid)
+				}
+			}
+		})
+	}
+}
+
+func TestGenerateFileHandling(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1. Regular File
+	os.WriteFile(filepath.Join(tmpDir, "user.go"), []byte("package models\ntype User struct{ Name string }"), 0644)
+	// 2. Test File (should be ignored)
+	os.WriteFile(filepath.Join(tmpDir, "user_test.go"), []byte("package models\ntype Internal struct{ ID int }"), 0644)
+	// 3. Subdirectory File
+	subDir := filepath.Join(tmpDir, "sub")
+	os.Mkdir(subDir, 0755)
+	os.WriteFile(filepath.Join(subDir, "item.go"), []byte("package sub\ntype Item struct{ Price int }"), 0644)
+
+	outputFile := filepath.Join(tmpDir, "types.ts")
+	New().FromDir(tmpDir).ToFile(outputFile).Generate()
+
+	content, _ := os.ReadFile(outputFile)
+	output := string(content)
+
+	if !strings.Contains(output, "interface User") {
+		t.Error("Failed to find User")
+	}
+	if !strings.Contains(output, "interface Item") {
+		t.Error("Failed to find Item from subfolder")
+	}
+	if strings.Contains(output, "interface Internal") {
+		t.Error("Should not have exported Internal from test file")
+	}
+}

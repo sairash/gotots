@@ -122,6 +122,10 @@ func (p *Parser) parseStruct(name, pkgName string, structType *ast.StructType) *
 			}
 		}
 
+		if _, ok := field.Type.(*ast.StructType); ok {
+			fieldInfo.EmbeddedStruct = p.parseStruct(field.Names[0].Name, pkgName, field.Type.(*ast.StructType))
+		}
+
 		result.Fields = append(result.Fields, fieldInfo)
 	}
 	return result
@@ -140,6 +144,8 @@ func (p *Parser) typeToString(expr ast.Expr) string {
 		return p.typeToString(t.X) + "." + t.Sel.Name
 	case *ast.MapType:
 		return "map[" + p.typeToString(t.Key) + "]" + p.typeToString(t.Value)
+	case *ast.StructType:
+		return "struct"
 	default:
 		return "any"
 	}

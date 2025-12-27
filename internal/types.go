@@ -22,11 +22,12 @@ type StructInfo struct {
 
 // represents a field of a struct
 type FieldInfo struct {
-	Name       string
-	Type       string
-	JSONTag    string
-	IsEnum     bool
-	EnumType   string
-	IsOptional bool
-	IsPointer  bool
+	Name           string
+	Type           string
+	JSONTag        string
+	IsEnum         bool
+	EnumType       string
+	IsOptional     bool
+	IsPointer      bool
+	EmbeddedStruct *StructInfo
 }

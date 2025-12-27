@@ -75,8 +75,17 @@ func (g *Generator) generateStruct(structInfo StructInfo) string {
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("export interface %s {\n", structInfo.Name))
+	sb.WriteString(g.generateFields(structInfo, 1))
+	sb.WriteString("};\n")
+
+	return sb.String()
+}
+
+func (g *Generator) generateFields(structInfo StructInfo, indentLevel int) string {
+	var sb strings.Builder
+
 	for _, field := range structInfo.Fields {
-		tsType := g.goTypeToTS(field)
+		tsType := g.goTypeToTS(field, indentLevel)
 		optionalMarker := ""
 		if field.IsOptional {
 			optionalMarker = "?"
@@ -87,17 +96,19 @@ func (g *Generator) generateStruct(structInfo StructInfo) string {
 			fieldName = field.JSONTag
 		}
 
-		sb.WriteString(fmt.Sprintf("    %s%s: %s;\n", fieldName, optionalMarker, tsType))
+		sb.WriteString(fmt.Sprintf("%s%s%s: %s;\n", strings.Repeat("	", indentLevel), fieldName, optionalMarker, tsType))
 	}
-
-	sb.WriteString("};\n")
 
 	return sb.String()
 }
 
 // converts a go type to a TypeScript type
-func (g *Generator) goTypeToTS(field FieldInfo) string {
+func (g *Generator) goTypeToTS(field FieldInfo, indentLevel int) string {
 	goType := field.Type
+
+	if field.EmbeddedStruct != nil {
+		return fmt.Sprintf("{\n%s%s}", g.generateFields(*field.EmbeddedStruct, indentLevel+1), strings.Repeat("	", indentLevel))
+	}
 
 	isArray := strings.HasPrefix(goType, "[]")
 	if isArray {
