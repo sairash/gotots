@@ -72,14 +72,19 @@ type User struct {
 }
 
 type Post struct {
-	ID        int64     `json:"id"`
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	Author    User      `json:"author,omitempty"`
-	Tags      []string  `json:"tags"`
+	ID      int64  `json:"id"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
+	Author  User   `json:"author,omitempty"`
+	Tags    struct {
+		Tag        string `json:"tag"`
+		TaggedUser User   `json:"tagged_user"`
+	} `json:"tags"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
 ```
 
 Running `gotots -dir models -output types.ts` generates:
@@ -88,24 +93,28 @@ Running `gotots -dir models -output types.ts` generates:
 /* Do not change, this code is generated from Golang structs */
 
 export interface User {
-    ID: number;
-    Name: string;
-    Email: string;
-    Avatar?: string | null;
-    CreatedAt: string;
+	ID: number;
+	Name: string;
+	Email: string;
+	Avatar?: string | null;
+	CreatedAt: string;
 };
 
 export interface Post {
-    id: number;
-    title: string;
-    content: string;
-    author?: User;
-    tags: string[];
-    created_at: string;
-    updated_at: string;
+	id: number;
+	title: string;
+	content: string;
+	author?: User;
+	tags: {
+		tag: string;
+		tagged_user: User;
+	};
+	created_at: string;
+	updated_at: string;
 };
-
 ```
+
+***For more examples see [Examples.md](./EXAMPLES.md)***
 
 ## Type Mappings
 
